@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8" />
-<title>Test</title>
+<title>OSM_Extract</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -171,12 +171,323 @@ div#notebook {
   <div tabindex="-1" id="notebook" class="border-box-sizing">
     <div class="container" id="notebook-container">
 
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="OSM-Variable-extraction">OSM Variable extraction<a class="anchor-link" href="#OSM-Variable-extraction">&#182;</a></h1><p>The following provides an overview of progress of extracting OSM data.</p>
+<h2 id="Import-packages">Import packages<a class="anchor-link" href="#Import-packages">&#182;</a></h2>
+</div>
+</div>
+</div>
 <div class="cell border-box-sizing code_cell rendered">
 <div class="input">
 <div class="prompt input_prompt">In&nbsp;[1]:</div>
 <div class="inner_cell">
     <div class="input_area">
-<div class=" highlight hl-ipython2"><pre><span></span><span class="k">print</span> <span class="s1">&#39;Hello&#39;</span>
+<div class=" highlight hl-ipython2"><pre><span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+
+<span class="kn">import</span> <span class="nn">geopandas</span> <span class="kn">as</span> <span class="nn">gpd</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="kn">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">shapely.geometry</span> <span class="kn">import</span> <span class="n">LineString</span>
+
+<span class="kn">import</span> <span class="nn">utm</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="o">%</span><span class="k">matplotlib</span> inline
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Extract-data-from-OSM">Extract data from OSM<a class="anchor-link" href="#Extract-data-from-OSM">&#182;</a></h2><p>Mapzen.com gives the possibility to extract data for specific segments (cities or custom segments). This data includes several .geojson files for, for example, roads, amenities and places. We are interested in the road file and we can import that using geopandas. The data includes valuable data on the type of road and the xistence of tunnels and bridges.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[2]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">extract_OSM_data</span><span class="p">(</span><span class="n">file_name</span><span class="p">):</span>
+
+    <span class="c1"># Allow for experimentation with different subsets of Sao Paulo</span>
+    <span class="n">SP_roads</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+    <span class="c1"># SP_roads = gpd.read_file(&#39;SP_mini/ex_cswAtf7yA4TBgH4cthEPUc2nnDNg9_roads.geojson&#39;)</span>
+    <span class="c1"># SP_roads = gpd.read_file(&#39;SP_mini_2/ex_2iEXHVFGa5yPkiDvi7gd3Uv3k8DmQ_roads.geojson&#39;)</span>
+
+    <span class="c1"># Plot network</span>
+    <span class="c1"># SP_roads.plot(figsize=(5,5))</span>
+
+    <span class="c1"># Print dataframe</span>
+    <span class="n">SP_roads</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+    
+    <span class="k">return</span> <span class="n">SP_roads</span>
+
+<span class="n">road_list</span> <span class="o">=</span> <span class="n">extract_OSM_data</span><span class="p">(</span><span class="s1">&#39;SP_Downtown/SP_Downtown_roads.geojson&#39;</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Read-pixel-list">Read pixel list<a class="anchor-link" href="#Read-pixel-list">&#182;</a></h2><p>This code assumes pixel list with latitude and longitude coordinates is already created. We will read this file and create a bounding box with the following bounds.</p>
+<ul>
+<li>minx - Latitude lowerbound</li>
+<li>maxx - Latitude upperbound</li>
+<li>miny - Longitude lowerbound</li>
+<li>maxy - Longitude upperbound</li>
+</ul>
+<p>(Or the other way around if I'm wrong with latitude and longitude)</p>
+<p>\textit{Note}: Currently we assume coordinates are provided in degrees, so we translate them to UTM.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[3]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">read_pixel_list</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">pixel_width</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Specify pixel_width to account for pixel size. For pixels of 1km^2, the pixel_width is 1000. </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">SP_pixel</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+    <span class="n">SP_pixel</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span> <span class="o">=</span> <span class="bp">True</span><span class="p">,</span> <span class="n">inplace</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span>
+
+    <span class="n">pixel_width</span> <span class="o">=</span> <span class="mi">1000</span>
+
+    <span class="c1"># Create empty lists to keep track</span>
+    <span class="n">minx_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">miny_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">maxx_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">maxy_utm</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate over all the rows for conversion</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">SP_pixel</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+
+        <span class="n">x_utm</span><span class="p">,</span> <span class="n">y_utm</span><span class="p">,</span> <span class="n">zone_letter</span><span class="p">,</span> <span class="n">zone_number</span> <span class="o">=</span> <span class="n">utm</span><span class="o">.</span><span class="n">from_latlon</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;lat&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;lon&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Append to lists</span>
+        <span class="n">minx_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x_utm</span> <span class="o">-</span> <span class="n">pixel_width</span> <span class="o">/</span> <span class="mi">2</span> <span class="p">)</span>
+        <span class="n">miny_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y_utm</span> <span class="o">-</span> <span class="n">pixel_width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">maxx_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x_utm</span> <span class="o">+</span> <span class="n">pixel_width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">maxy_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y_utm</span> <span class="o">+</span> <span class="n">pixel_width</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="c1"># Update dataframe to UTM</span>
+    <span class="n">SP_pixel</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">minx_utm</span>
+    <span class="n">SP_pixel</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">miny_utm</span>
+    <span class="n">SP_pixel</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">maxx_utm</span>
+    <span class="n">SP_pixel</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">maxy_utm</span>
+
+    <span class="n">SP_pixel</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+    
+    <span class="k">return</span> <span class="n">SP_pixel</span>
+
+<span class="n">pixel_list</span> <span class="o">=</span> <span class="n">read_pixel_list</span><span class="p">(</span><span class="s1">&#39;pixel_list_SaoPauloDowntown.xlsx&#39;</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Manipulate-geometry">Manipulate geometry<a class="anchor-link" href="#Manipulate-geometry">&#182;</a></h2><p>Currently, each road is stored as a Shapely file. For easier processing of the roads, we take the following steps.</p>
+<h3 id="Find-maximum-bounds-of-roads">Find maximum bounds of roads<a class="anchor-link" href="#Find-maximum-bounds-of-roads">&#182;</a></h3><p>We will find the maximum and minimum latitude and longitude for each road, so we can easier match it to the pixels at a later stage. Furthermore, we transform it to UTM for easier processing.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[4]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">find_road_bounds</span><span class="p">(</span><span class="n">roads_dataframe</span><span class="p">):</span>
+    <span class="c1"># Create lat, lon road bounds</span>
+    <span class="n">road_bounds</span> <span class="o">=</span> <span class="n">roads_dataframe</span><span class="p">[</span><span class="s1">&#39;geometry&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">bounds</span>
+
+    <span class="c1"># Create empty lists to keep track</span>
+    <span class="n">minx_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">miny_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">maxx_utm</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">maxy_utm</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate over all the rows for conversion</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">road_bounds</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+
+        <span class="c1"># Convert</span>
+        <span class="n">minx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">zone_letter</span><span class="p">,</span> <span class="n">zone_number</span> <span class="o">=</span> <span class="n">utm</span><span class="o">.</span><span class="n">from_latlon</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">])</span>
+        <span class="n">maxx</span><span class="p">,</span> <span class="n">maxy</span><span class="p">,</span> <span class="n">zone_letter</span><span class="p">,</span> <span class="n">zone_number</span> <span class="o">=</span> <span class="n">utm</span><span class="o">.</span><span class="n">from_latlon</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">],</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">])</span>
+
+        <span class="c1"># Append to lists</span>
+        <span class="n">minx_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">minx</span><span class="p">)</span>
+        <span class="n">miny_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">miny</span><span class="p">)</span>
+        <span class="n">maxx_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">maxx</span><span class="p">)</span>
+        <span class="n">maxy_utm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">maxy</span><span class="p">)</span>
+
+    <span class="c1"># Update dataframe to UTM</span>
+    <span class="n">road_bounds</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">minx_utm</span>
+    <span class="n">road_bounds</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">miny_utm</span>
+    <span class="n">road_bounds</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">maxx_utm</span>
+    <span class="n">road_bounds</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">maxy_utm</span>
+
+    <span class="c1"># Concatenate dataframe to roads dataframe</span>
+    <span class="n">roads</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">((</span><span class="n">roads_dataframe</span><span class="p">,</span> <span class="n">road_bounds</span><span class="p">),</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">roads</span>
+
+<span class="n">road_list</span> <span class="o">=</span> <span class="n">find_road_bounds</span><span class="p">(</span><span class="n">road_list</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="Convert-linestring-to-list-of-UTM-coordinates">Convert linestring to list of UTM coordinates<a class="anchor-link" href="#Convert-linestring-to-list-of-UTM-coordinates">&#182;</a></h3>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[5]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">convert_linestring_to_UTM</span><span class="p">(</span><span class="n">road_df</span><span class="p">):</span>
+
+    <span class="c1"># Lists to keep track</span>
+    <span class="n">road_utm_column</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">road_length_column</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">number_of_coord</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate over all roads</span>
+    <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">road_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="c1"># Translate linestring to list</span>
+            <span class="n">road_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="s1">&#39;geometry&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+            <span class="c1"># Check and store number of coord</span>
+            <span class="n">road_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">road_list</span><span class="p">)</span>
+            <span class="n">number_of_coord</span> <span class="o">=</span> <span class="n">road_length</span>
+            <span class="n">road_length_column</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road_length</span><span class="p">)</span>
+
+            <span class="c1"># Convert road to utm</span>
+            <span class="n">road_utm</span> <span class="o">=</span> <span class="p">[]</span>
+            
+            <span class="c1"># Transform coordinates to UTM</span>
+            <span class="k">for</span> <span class="n">coord</span> <span class="ow">in</span> <span class="n">road_list</span><span class="p">:</span>
+                    <span class="n">x_utm</span><span class="p">,</span> <span class="n">y_utm</span><span class="p">,</span> <span class="n">zone_letter</span><span class="p">,</span> <span class="n">zone_number</span> <span class="o">=</span> <span class="n">utm</span><span class="o">.</span><span class="n">from_latlon</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">road_utm</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x_utm</span><span class="p">,</span> <span class="n">y_utm</span><span class="p">])</span>
+
+            <span class="c1"># Store road in column</span>
+            <span class="n">road_utm_column</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road_utm</span><span class="p">)</span>
+
+    <span class="c1"># Add column to roads dataframe</span>
+    <span class="n">road_df</span><span class="p">[</span><span class="s1">&#39;road_coords&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">road_utm_column</span>
+    <span class="n">road_df</span><span class="p">[</span><span class="s1">&#39;number_of_nodes&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">road_length_column</span>
+
+    <span class="k">return</span> <span class="n">road_df</span>  
+
+<span class="n">road_list</span> <span class="o">=</span> <span class="n">convert_linestring_to_UTM</span><span class="p">(</span><span class="n">road_list</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Road-Connectivity">Road Connectivity<a class="anchor-link" href="#Road-Connectivity">&#182;</a></h2><p>To determine road connectivity, we want to find all nodes that share coordinates. If two nodes share a coordinate, they indicate an intersection.</p>
+<h3 id="Find-coordinates-of-relevant-roads">Find coordinates of relevant roads<a class="anchor-link" href="#Find-coordinates-of-relevant-roads">&#182;</a></h3><p>First, we need to identify for what road types we are interested in intersections.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[6]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">find_coordinates_relevant_road_types</span><span class="p">(</span><span class="n">road_df</span><span class="p">,</span> <span class="n">road_types</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39; Road types: List of road types as used in OSM&#39;&#39;&#39;</span>
+    
+    <span class="k">print</span> <span class="s1">&#39;Total number of roads: &#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">road_df</span><span class="p">)</span>
+    <span class="n">road_df</span> <span class="o">=</span> <span class="n">road_df</span><span class="p">[</span><span class="n">road_df</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">road_types</span><span class="p">)]</span>
+    <span class="k">print</span> <span class="s1">&#39;Total number of allowable roads: &#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">road_df</span><span class="p">)</span>
+    
+    <span class="c1"># Create list to keep track of coordinates</span>
+    <span class="n">coordinates</span> <span class="o">=</span> <span class="p">[]</span>
+    
+    <span class="c1"># Iterate over roads</span>
+    <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">road_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="c1"># Translate linestring to list</span>
+            <span class="n">road_list</span> <span class="o">=</span> <span class="n">road</span><span class="p">[</span><span class="s1">&#39;road_coords&#39;</span><span class="p">]</span>
+            
+            <span class="c1"># Iterate over coordinates in road list</span>
+            <span class="c1"># Check if road lenght is bigger than 1, if it is, there is just one point and we want to delete it later</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">road_list</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mf">1.1</span><span class="p">:</span>
+
+                <span class="c1"># Analyze first coordiante</span>
+                <span class="k">for</span> <span class="n">coord</span> <span class="ow">in</span> <span class="p">[</span><span class="n">road_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]]:</span>
+                    <span class="n">coordinates</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">])),</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+
+                <span class="c1"># Analyze center coordinates</span>
+                <span class="k">for</span> <span class="n">coord</span> <span class="ow">in</span> <span class="n">road_list</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+                    <span class="n">coordinates</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">])),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+
+                <span class="c1"># Analyze last coordinate</span>
+                <span class="k">for</span> <span class="n">coord</span> <span class="ow">in</span> <span class="p">[</span><span class="n">road_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]]:</span>
+                    <span class="n">coordinates</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">])),</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+
+            <span class="c1"># If there is only 1 coordinate</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">coord</span> <span class="ow">in</span> <span class="n">road_list</span><span class="p">:</span>
+                    <span class="n">coordinates</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">coord</span><span class="p">[</span><span class="mi">1</span><span class="p">])),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+    
+    <span class="c1"># Store individual coordinates for road connectivity</span>
+    <span class="n">coord_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">coordinates</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;coords&#39;</span><span class="p">,</span> <span class="s1">&#39;connecting_node&#39;</span><span class="p">,</span> <span class="s1">&#39;center_node&#39;</span><span class="p">,</span> <span class="s1">&#39;one_node&#39;</span><span class="p">])</span>
+    
+    <span class="k">return</span> <span class="n">coord_df</span>
+
+
+
+<span class="n">road_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;motorway&#39;</span><span class="p">,</span> <span class="s1">&#39;motorway_link&#39;</span><span class="p">,</span> <span class="s1">&#39;trunk&#39;</span><span class="p">,</span> <span class="s1">&#39;trunk_link&#39;</span><span class="p">,</span> <span class="s1">&#39;primary&#39;</span><span class="p">,</span> <span class="s1">&#39;primary_link&#39;</span><span class="p">,</span>
+                           <span class="s1">&#39;secondary&#39;</span><span class="p">,</span> <span class="s1">&#39;secondary_link&#39;</span><span class="p">,</span> <span class="s1">&#39;tertiary&#39;</span><span class="p">,</span> <span class="s1">&#39;tertiary_link&#39;</span><span class="p">,</span> <span class="s1">&#39;residential&#39;</span><span class="p">,</span> <span class="s1">&#39;road&#39;</span><span class="p">,</span>
+                           <span class="s1">&#39;living_street&#39;</span><span class="p">,</span> <span class="s1">&#39;unclassified&#39;</span><span class="p">]</span>
+
+<span class="n">coordinates_df</span> <span class="o">=</span> <span class="n">find_coordinates_relevant_road_types</span><span class="p">(</span><span class="n">road_list</span><span class="p">,</span> <span class="n">road_types</span><span class="p">)</span>
 </pre></div>
 
 </div>
@@ -189,11 +500,587 @@ div#notebook {
 
 <div class="output_area"><div class="prompt"></div>
 <div class="output_subarea output_stream output_stdout output_text">
-<pre>Hello
+<pre>Total number of roads:  5095
+Total number of allowable roads:  3996
 </pre>
 </div>
 </div>
 
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="Find-intersections">Find intersections<a class="anchor-link" href="#Find-intersections">&#182;</a></h3><p>We take the following steps to find intersections.</p>
+<ol>
+<li>Search for all unique coordinates</li>
+<li>Count frequency of unique coordinates</li>
+<li>Take all coordinates that have frequency of two or more</li>
+</ol>
+<p>For the coordinates of the remaining subset, two things could be the case</p>
+<ol>
+<li>We have an intersection, or at least a point where you can go into three directions</li>
+<li>The road changes name or type, a point where you can only move in two directions</li>
+</ol>
+<p>Obviously, the latter does not point to road connectivity. We can identify this if two nodes 'connecting_node' coincide at the same coordinate. Therefore, we add a fourth filter to our analysis.</p>
+<ol>
+<li>Take all the coordinates that have frequency two or more and are not two connecting nodes</li>
+</ol>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[7]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">road_connecitivity</span><span class="p">(</span><span class="n">coordinates_df</span><span class="p">):</span>
+    <span class="c1"># Print number of coordines</span>
+    <span class="k">print</span> <span class="s1">&#39;Number of nodes: &#39;</span><span class="p">,</span> <span class="n">coordinates_df</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Create pivot table to find nodes with the same coordiantes</span>
+    <span class="n">pivot_table</span> <span class="o">=</span> <span class="n">coordinates_df</span><span class="o">.</span><span class="n">pivot_table</span><span class="p">(</span><span class="n">index</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">],</span> <span class="n">aggfunc</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">count_nonzero</span><span class="p">)</span>
+
+    <span class="c1">#Delete all the nodes with only one coordiante</span>
+    <span class="n">pivot_table</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s1">&#39;one_node&#39;</span><span class="p">],</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">inplace</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span>
+
+    <span class="c1"># Print number of unique coordiantes</span>
+    <span class="k">print</span> <span class="s1">&#39;Number of unique nodes: &#39;</span><span class="p">,</span> <span class="n">pivot_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Filter coords with more than one node</span>
+    <span class="n">pivot_table</span> <span class="o">=</span> <span class="n">pivot_table</span><span class="p">[</span><span class="n">pivot_table</span><span class="p">[</span><span class="s1">&#39;coords&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">print</span> <span class="s1">&#39;Number of coordinates with two or more nodes: &#39;</span><span class="p">,</span> <span class="n">pivot_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Filter coordinates with only two nodes that are both a connecting node</span>
+    <span class="n">pivot_table</span> <span class="o">=</span> <span class="n">pivot_table</span><span class="p">[(</span><span class="n">pivot_table</span><span class="p">[</span><span class="s1">&#39;coords&#39;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">pivot_table</span><span class="p">[</span><span class="s1">&#39;center_node&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)]</span>
+    <span class="k">print</span> <span class="s1">&#39;Number of connectivity coordinates: &#39;</span><span class="p">,</span> <span class="n">pivot_table</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    
+    <span class="n">pivot_table</span> <span class="o">=</span> <span class="n">pivot_table</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">pivot_table</span> 
+
+<span class="n">intersections</span> <span class="o">=</span> <span class="n">road_connecitivity</span><span class="p">(</span><span class="n">coordinates_df</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>Number of nodes:  19222
+Number of unique nodes:  13086
+Number of coordinates with two or more nodes:  4356
+Number of connectivity coordinates:  3429
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="Map-intersections-to-pixel-list">Map intersections to pixel list<a class="anchor-link" href="#Map-intersections-to-pixel-list">&#182;</a></h3><p>Next, we want to map interesections to the pixel list. We can use a function that maps points to the pixel list.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[8]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">map_points</span><span class="p">(</span><span class="n">points_df</span><span class="p">,</span> <span class="n">pixel_list</span><span class="p">,</span> <span class="n">column_title</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Points_df: Requires x and y column</span>
+<span class="sd">        column_title is title of column in pixel_list datafarme&quot;&quot;&quot;</span>
+    
+    <span class="c1">#Create list to keep track of frequency of points</span>
+    <span class="n">points_frequency</span> <span class="o">=</span> <span class="p">[]</span>
+    
+    <span class="c1"># Iterate over pixels</span>
+    <span class="k">for</span> <span class="n">pixel_id</span><span class="p">,</span> <span class="n">pixel</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+        <span class="c1"># Explicitly define bounds of pixel</span>
+        <span class="n">pixel_minx</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span>
+        <span class="n">pixel_miny</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span>
+        <span class="n">pixel_maxx</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span>
+        <span class="n">pixel_maxy</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span>
+        
+        <span class="c1"># Filter points df based on bounds</span>
+        <span class="n">points_in_pixel</span> <span class="o">=</span> <span class="n">points_df</span><span class="p">[(</span><span class="n">points_df</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">pixel_maxx</span><span class="p">)</span> <span class="o">&amp;</span>
+                  <span class="p">(</span><span class="n">points_df</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">pixel_minx</span><span class="p">)</span> <span class="o">&amp;</span>
+                  <span class="p">(</span><span class="n">points_df</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">pixel_maxy</span><span class="p">)</span> <span class="o">&amp;</span>
+                  <span class="p">(</span><span class="n">points_df</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">pixel_miny</span><span class="p">)]</span>
+        
+        <span class="c1"># Store frequency for this pixel</span>
+        <span class="n">points_frequency</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">points_in_pixel</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        
+    <span class="c1"># Append data to pixel_list</span>
+    <span class="n">pixel_list</span><span class="p">[</span><span class="n">column_title</span><span class="p">]</span> <span class="o">=</span> <span class="n">points_frequency</span>
+    
+    <span class="k">return</span> <span class="n">pixel_list</span>
+
+<span class="n">pixel_list</span> <span class="o">=</span> <span class="n">map_points</span><span class="p">(</span><span class="n">intersections</span><span class="p">,</span> <span class="n">pixel_list</span><span class="p">,</span> <span class="s1">&#39;intersections&#39;</span><span class="p">)</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="Road-capacity">Road capacity<a class="anchor-link" href="#Road-capacity">&#182;</a></h2><p>To to determine the road capacity in a pixel we have to take three steps.</p>
+\begin{enumerate}
+    \item Find the road(segment)s inside a pixel
+    \item Find the distance of each segment and multiply by its capacity
+    \item Sum over all road(segment)s inside the pixel
+\end{enumerate}<p>2 and 3 are trivial, there are however some issues with 1. The following three situations can occur (\textbf{visualize}):</p>
+\begin{itemize}
+    \item A roadsegment lies completely within the pixel (trivial)
+    \item A roadsegment has a starting point in one pixel and an end point in another pixel
+    \item A road segment crosses the pixel but has a start and end point in adjacent pixels
+\end{itemize}
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="Supporting-functions">Supporting functions<a class="anchor-link" href="#Supporting-functions">&#182;</a></h3><h4 id="Check-if-points-or-roads-are-in-a-pixel">Check if points or roads are in a pixel<a class="anchor-link" href="#Check-if-points-or-roads-are-in-a-pixel">&#182;</a></h4><p>Based on the bounding box of each road and each pixel, we can determine if a road or a particular point is in the pixel.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[9]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">point_in_pixel</span><span class="p">(</span><span class="n">coordinate</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+    
+    <span class="c1"># Check if coordinate is in pixel</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">coordinate</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span> 
+        <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span> 
+        <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span> 
+        <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span><span class="p">):</span>
+        
+        <span class="k">return</span> <span class="bp">True</span>
+    
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+<span class="k">def</span> <span class="nf">check_completely_in_pixel</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+    
+    <span class="k">if</span> <span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span> 
+        <span class="ow">and</span> <span class="n">road</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span> 
+        <span class="ow">and</span> <span class="n">road</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span> 
+        <span class="ow">and</span> <span class="n">road</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span><span class="p">):</span>
+        
+        <span class="k">return</span> <span class="bp">True</span>
+    
+    <span class="k">else</span><span class="p">:</span>
+        
+        <span class="k">return</span> <span class="bp">False</span>
+    
+    
+<span class="k">def</span> <span class="nf">check_partly_in_pixel</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+    
+    <span class="c1"># Iterate over all coordiantes in road</span>
+    <span class="k">for</span> <span class="n">coordinate</span> <span class="ow">in</span> <span class="n">road</span><span class="p">[</span><span class="s1">&#39;road_coords&#39;</span><span class="p">]:</span>
+        
+        <span class="c1"># If one of the coordinates is in the pixel, return true</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">coordinate</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span> 
+            <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span> 
+            <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span> 
+            <span class="ow">and</span> <span class="n">coordinate</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span><span class="p">):</span>
+
+            <span class="k">return</span> <span class="bp">True</span>
+    
+    <span class="c1"># If none of the coordinates is in the pixel, return false</span>
+    <span class="k">return</span> <span class="bp">False</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h4 id="Find-new-road-coordinates-for-segments-that-are-partly-in-the-pixel">Find new road coordinates for segments that are partly in the pixel<a class="anchor-link" href="#Find-new-road-coordinates-for-segments-that-are-partly-in-the-pixel">&#182;</a></h4><p>In case of the second situation, we want to delete the coordinates from the road that are outside the pixel. However, we have to make sure that we allocate a part of the segment that crosses the pixel bounds to that pixel. We do so by finding the intersection between the segment and the bound, we 'determine the midpoint'. We can use this midpoint to 'create new road coordinates'.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[10]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">create_new_road_coordinates</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+
+
+    <span class="c1"># Find points that are in or out</span>
+    <span class="n">node_in_pixel</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate over nodes to check if they&#39;re in the pixel</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">road</span><span class="p">)):</span>
+        <span class="n">node_in_pixel</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">point_in_pixel</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">))</span>
+
+    <span class="c1"># Create new node list</span>
+    <span class="n">node_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Delete nodes that are out and for which the next one is out too, otherwise find midpoint</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">road</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])):</span>
+
+        <span class="c1"># Check if current node is in</span>
+        <span class="k">if</span> <span class="n">node_in_pixel</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+
+            <span class="c1">#If subsequent node is in find midpoint</span>
+            <span class="k">if</span> <span class="n">node_in_pixel</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">True</span><span class="p">:</span>
+
+                <span class="n">mid_point</span> <span class="o">=</span> <span class="n">determine_midpoint</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">)</span>
+                <span class="n">node_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mid_point</span><span class="p">)</span>
+        
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">node_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            
+             <span class="c1">#If subsequent node is out find midpoint</span>
+            <span class="k">if</span> <span class="n">node_in_pixel</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+                <span class="n">mid_point</span> <span class="o">=</span> <span class="n">determine_midpoint</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">)</span>
+                <span class="n">node_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mid_point</span><span class="p">)</span>
+        
+        <span class="c1"># Check if the last node is in</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">road</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">node_in_pixel</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="bp">True</span><span class="p">:</span>
+                <span class="n">node_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">node_list</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[11]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">determine_midpoint</span><span class="p">(</span><span class="n">point_1</span><span class="p">,</span> <span class="n">point_2</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+
+    <span class="c1"># Determine line</span>
+    <span class="n">slope</span> <span class="o">=</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">intercept</span> <span class="o">=</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Check for each of the bounds if they are on the line segment</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxx</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="n">maxx</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">new_x</span> <span class="o">+</span> <span class="n">intercept</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+        
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">new_point</span>
+            
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">minx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">minx</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="n">minx</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">new_x</span> <span class="o">+</span> <span class="n">intercept</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+        
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">new_point</span>
+            
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxy</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxy</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">maxy</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_y</span> <span class="o">-</span> <span class="n">intercept</span><span class="p">)</span> <span class="o">/</span> <span class="n">slope</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+        
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">new_point</span>
+            
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">miny</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">miny</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">miny</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_y</span> <span class="o">-</span> <span class="n">intercept</span><span class="p">)</span> <span class="o">/</span> <span class="n">slope</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>     
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">new_point</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h4 id="Find-new-road-coordinates-for-segments-that-cross-the-pixel">Find new road coordinates for segments that cross the pixel<a class="anchor-link" href="#Find-new-road-coordinates-for-segments-that-cross-the-pixel">&#182;</a></h4><p>In case of the thirds situation, we want to check every segment if it crosses the pixel. Therefore, we check for every segment if it intersects with two of the bounds (it always intersects with two, one to go in, one to go out). This function is slightly different than if a road is partly in the pixel, since we are looking for two intersections of the line with the pixel opposite to one. Therefore, we define two functions that are special cases of the once for a road that is partly in the pixel.</p>
+
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[12]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">create_new_road_coordinates_crossing</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+
+    <span class="c1"># Create new node list</span>
+    <span class="n">node_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># We know that none of the nodes is in the pixel, so we iterate over all nodes and check for crossing immediatly</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">road</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])):</span>
+
+            <span class="c1"># Determine if a segment crosses the boundary</span>
+            <span class="n">cross_points</span> <span class="o">=</span> <span class="n">determine_midpoint_crossing</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">road</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">)</span>
+
+            <span class="c1"># If there are not cross points do nothing</span>
+            <span class="c1"># If there are two cross points that&#39;s the node list</span>
+            <span class="k">if</span> <span class="n">cross_points</span> <span class="o">==</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">node_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">node_list</span> <span class="o">=</span> <span class="n">cross_points</span>
+                <span class="k">return</span> <span class="n">node_list</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[13]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">determine_midpoint_crossing</span><span class="p">(</span><span class="n">point_1</span><span class="p">,</span> <span class="n">point_2</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+
+
+    <span class="c1"># List of cross points</span>
+
+    <span class="n">cross_points</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># Determine line</span>
+    <span class="n">slope</span> <span class="o">=</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">intercept</span> <span class="o">=</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># Check for each of the bounds if they are on the line segment</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxx</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxx</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="n">maxx</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">new_x</span> <span class="o">+</span> <span class="n">intercept</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="n">cross_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_point</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">minx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">minx</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">minx</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="n">minx</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">slope</span> <span class="o">*</span> <span class="n">new_x</span> <span class="o">+</span> <span class="n">intercept</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="n">cross_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_point</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxy</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">maxy</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">maxy</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">maxy</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_y</span> <span class="o">-</span> <span class="n">intercept</span><span class="p">)</span> <span class="o">/</span> <span class="n">slope</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>
+
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="n">cross_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_point</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">miny</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">point_2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">miny</span> <span class="ow">and</span> <span class="n">point_1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">miny</span><span class="p">):</span>
+        <span class="c1"># Find corresponding point</span>
+        <span class="n">new_y</span> <span class="o">=</span> <span class="n">miny</span>
+        <span class="n">new_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">new_y</span> <span class="o">-</span> <span class="n">intercept</span><span class="p">)</span> <span class="o">/</span> <span class="n">slope</span>
+        <span class="n">new_point</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_x</span><span class="p">,</span> <span class="n">new_y</span><span class="p">]</span>     
+        <span class="c1"># Check if the newpoint is in the pixel, if so, we found our intersect</span>
+        <span class="k">if</span> <span class="n">point_in_pixel</span><span class="p">(</span><span class="n">new_point</span><span class="p">,</span> <span class="n">minx</span><span class="p">,</span> <span class="n">maxx</span><span class="p">,</span> <span class="n">miny</span><span class="p">,</span> <span class="n">maxy</span><span class="p">):</span>
+            <span class="n">cross_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_point</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">cross_points</span>
+</pre></div>
+
+</div>
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="prompt input_prompt">
+</div>
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="Determine-road-capacity">Determine road capacity<a class="anchor-link" href="#Determine-road-capacity">&#182;</a></h3>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[14]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span><span class="k">def</span> <span class="nf">road_capacity_per_pixel</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">,</span> <span class="n">roads_list</span><span class="p">,</span> <span class="n">road_types</span><span class="p">):</span>
+    
+    <span class="c1"># Ignore roads that are not allowed</span>
+    <span class="n">roads_list</span> <span class="o">=</span> <span class="n">roads_list</span><span class="p">[</span><span class="n">roads_list</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">road_types</span><span class="p">)]</span>
+    
+    <span class="n">roads_in_pixel_list</span> <span class="o">=</span> <span class="p">[]</span>
+    
+    <span class="k">for</span> <span class="n">pixel_id</span><span class="p">,</span> <span class="n">pixel</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+        <span class="c1"># Explicitly define bounds of pixel</span>
+        <span class="n">pixel_minx</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span>
+        <span class="n">pixel_miny</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span>
+        <span class="n">pixel_maxx</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span>
+        <span class="n">pixel_maxy</span> <span class="o">=</span> <span class="n">pixel</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Filter road bounding boxes for overlap </span>
+        <span class="n">roads_in_pixel</span> <span class="o">=</span> <span class="n">roads_list</span><span class="p">[</span><span class="n">roads_list</span><span class="p">[</span><span class="s1">&#39;maxx&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">pixel_minx</span><span class="p">]</span>
+        <span class="n">roads_in_pixel</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="p">[</span><span class="n">roads_in_pixel</span><span class="p">[</span><span class="s1">&#39;minx&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">pixel_maxx</span><span class="p">]</span>
+        <span class="n">roads_in_pixel</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="p">[</span><span class="n">roads_in_pixel</span><span class="p">[</span><span class="s1">&#39;miny&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">pixel_maxy</span><span class="p">]</span>
+        <span class="n">roads_in_pixel</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="p">[</span><span class="n">roads_in_pixel</span><span class="p">[</span><span class="s1">&#39;maxy&#39;</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">pixel_miny</span><span class="p">]</span>
+        
+        <span class="k">print</span> <span class="nb">len</span><span class="p">(</span><span class="n">roads_in_pixel</span><span class="p">)</span>
+
+        <span class="c1">#### Find roads completely in pixel ####</span>
+        <span class="c1"># Create cleaned dataframe </span>
+        <span class="n">roads_in_pixel_clean</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+        
+        <span class="c1"># Keep track of road is completely in pixel</span>
+        <span class="n">list_completely_in_pixel</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c1"># Iterate over roads</span>
+        <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">roads_in_pixel</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            
+            <span class="c1">#Check if road bounding box falls completely within pixel</span>
+            <span class="n">completely_in_pixel</span> <span class="o">=</span> <span class="n">check_completely_in_pixel</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">pixel_minx</span><span class="p">,</span> <span class="n">pixel_maxx</span><span class="p">,</span> <span class="n">pixel_miny</span><span class="p">,</span> <span class="n">pixel_maxy</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">completely_in_pixel</span><span class="p">:</span>
+                <span class="n">list_completely_in_pixel</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road_id</span><span class="p">)</span>
+
+        <span class="n">roads_in_pixel_clean</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">list_completely_in_pixel</span><span class="p">]</span>
+        <span class="n">roads_not_completely_in_pixel</span> <span class="o">=</span> <span class="n">roads_in_pixel</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">list_completely_in_pixel</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span>   
+
+        <span class="c1"># Remaining roads in pixel are not completely in pixel</span>
+        
+        <span class="c1">#### Find roads with at least one coordiante in the pixel ####</span>
+        <span class="c1"># Keep track of roads that have one or more coordinates in pixel</span>
+        <span class="n">list_partly_in_pixel</span> <span class="o">=</span> <span class="p">[]</span>
+        
+        <span class="c1"># Iterate over roads partly in pixel</span>
+        <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">roads_not_completely_in_pixel</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">partly_in_pixel</span> <span class="o">=</span> <span class="n">check_partly_in_pixel</span><span class="p">(</span><span class="n">road</span><span class="p">,</span> <span class="n">pixel_minx</span><span class="p">,</span> <span class="n">pixel_maxx</span><span class="p">,</span> <span class="n">pixel_miny</span><span class="p">,</span> <span class="n">pixel_maxy</span><span class="p">)</span>
+            
+            <span class="k">if</span> <span class="n">partly_in_pixel</span><span class="p">:</span>
+                <span class="n">list_partly_in_pixel</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">road_id</span><span class="p">)</span>
+        
+        <span class="c1"># Update dataframe with roads partly in pixel</span>
+        <span class="n">roads_partly_in_pixel</span> <span class="o">=</span> <span class="n">roads_not_completely_in_pixel</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">list_partly_in_pixel</span><span class="p">]</span>
+
+        <span class="c1"># Create datafarme for roads potentially crossing the pixel</span>
+        <span class="n">roads_potentially_crossing_pixel</span> <span class="o">=</span> <span class="n">roads_not_completely_in_pixel</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">list_partly_in_pixel</span><span class="p">,</span> <span class="n">axis</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span>
+        
+        <span class="c1"># Allocate correct portion of roads to pixel</span>
+        <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">roads_partly_in_pixel</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">roads_partly_in_pixel</span><span class="o">.</span><span class="n">set_value</span><span class="p">(</span><span class="n">road_id</span><span class="p">,</span> <span class="s1">&#39;road_coords&#39;</span><span class="p">,</span> <span class="n">create_new_road_coordinates</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="s1">&#39;road_coords&#39;</span><span class="p">],</span> <span class="n">pixel_minx</span><span class="p">,</span> <span class="n">pixel_maxx</span><span class="p">,</span> <span class="n">pixel_miny</span><span class="p">,</span> <span class="n">pixel_maxy</span><span class="p">))</span>
+        
+        <span class="c1"># Update clean pixel list with updated roads</span>
+        <span class="n">roads_in_pixel_clean</span> <span class="o">=</span> <span class="n">roads_in_pixel_clean</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">roads_partly_in_pixel</span><span class="p">)</span>
+        
+        <span class="c1">### Find roads that potentially cross the pixel ####</span>
+        <span class="k">for</span> <span class="n">road_id</span><span class="p">,</span> <span class="n">road</span> <span class="ow">in</span> <span class="n">roads_potentially_crossing_pixel</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">roads_potentially_crossing_pixel</span><span class="o">.</span><span class="n">set_value</span><span class="p">(</span><span class="n">road_id</span><span class="p">,</span> <span class="s1">&#39;road_coords&#39;</span><span class="p">,</span> <span class="n">create_new_road_coordinates_crossing</span><span class="p">(</span><span class="n">road</span><span class="p">[</span><span class="s1">&#39;road_coords&#39;</span><span class="p">],</span> <span class="n">pixel_minx</span><span class="p">,</span> <span class="n">pixel_maxx</span><span class="p">,</span> <span class="n">pixel_miny</span><span class="p">,</span> <span class="n">pixel_maxy</span><span class="p">))</span>
+
+        <span class="c1"># Append to clean dataframe</span>
+        <span class="n">roads_in_pixel_clean</span> <span class="o">=</span> <span class="n">roads_in_pixel_clean</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">roads_potentially_crossing_pixel</span><span class="p">)</span>
+
+        <span class="c1">####### Time to start collect info about the roads in the pixel and adding it to the pixel_list datafarme #######</span>
+        
+        
+<span class="n">road_capacity_per_pixel</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">,</span> <span class="n">road_list</span><span class="p">,</span> <span class="n">road_types</span><span class="p">)</span>   
+</pre></div>
+
+</div>
+</div>
+</div>
+
+<div class="output_wrapper">
+<div class="output">
+
+
+<div class="output_area"><div class="prompt"></div>
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>128
+188
+144
+112
+146
+268
+206
+113
+204
+196
+201
+110
+137
+137
+153
+104
+</pre>
+</div>
+</div>
+
+</div>
+</div>
+
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+<div class="prompt input_prompt">In&nbsp;[&nbsp;]:</div>
+<div class="inner_cell">
+    <div class="input_area">
+<div class=" highlight hl-ipython2"><pre><span></span> 
+</pre></div>
+
+</div>
 </div>
 </div>
 
